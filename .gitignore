@@ -1,0 +1,12 @@
+node_modules/
+dist/
+
+# databases
+*.db
+*.db-shm
+*.db-wal
+pb_data/
+
+# env & OS
+.env
+.DS_Store
