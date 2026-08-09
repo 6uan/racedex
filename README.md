@@ -18,7 +18,9 @@ Requires Node >= 22 and pnpm.
 
 ```sh
 pnpm install
-pnpm --filter @racedex/api dev   # API on :3001
-pnpm --filter @racedex/web dev   # Vite dev server, proxies /api to :3001
-pnpm typecheck                   # typecheck all packages
+pnpm dev        # api on :3401 and web on :3400 (proxies /api to the api)
+pnpm typecheck  # typecheck all packages
 ```
+
+Ports default to racedex's lane in the dev box's Caddy port registry
+(web 3400, api 3401). Override with `WEB_PORT` / `API_PORT` to run elsewhere.
