@@ -2,7 +2,7 @@
 // the frontend only ever sees API response types (which live in @racedex/shared
 // once the read API exists), so the schema can evolve without touching the UI.
 
-export interface RaceRow {
+export type RaceRow = {
   id: string;
   source: string;
   source_race_id: string;
@@ -24,9 +24,9 @@ export interface RaceRow {
   raw: string;
   first_seen_at: string;
   last_seen_at: string;
-}
+};
 
-export interface EventRow {
+export type EventRow = {
   id: string;
   race_id: string;
   name: string;
@@ -34,16 +34,16 @@ export interface EventRow {
   date: string | null;
   start_time: string | null;
   raw: string;
-}
+};
 
-export interface PricePeriodRow {
+export type PricePeriodRow = {
   event_id: string;
   price_cents: number;
   opens_at: string | null;
   closes_at: string | null;
-}
+};
 
-export interface RaceResultRow {
+export type RaceResultRow = {
   race_id: string;
   source_event_id: string;
   year: number;
@@ -53,9 +53,9 @@ export interface RaceResultRow {
   winner_seconds: number | null;
   median_seconds: number | null;
   raw: string;
-}
+};
 
-export interface WeatherNormalRow {
+export type WeatherNormalRow = {
   geo_key: string;
   month_day: string;
   hour: number;
@@ -65,11 +65,11 @@ export interface WeatherNormalRow {
   heat_score: number | null;
   years_sampled: number;
   computed_at: string;
-}
+};
 
-export interface FetchCacheRow {
+export type FetchCacheRow = {
   url: string;
   fetched_at: string;
   status: number;
   body: string;
-}
+};
