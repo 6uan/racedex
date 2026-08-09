@@ -8,7 +8,7 @@
     "start": "tsx src/index.ts",
     "migrate": "tsx src/db/migrate-cli.ts",
     "ingest": "tsx src/ingest/cli.ts",
-    "test": "tsx --test src/ingest/*.test.ts",
+    "test": "tsx --test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

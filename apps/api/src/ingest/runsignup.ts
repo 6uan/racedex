@@ -109,14 +109,3 @@ export function resultsUrl(
   });
   return `${BASE}/race/${raceId}/results/get-results?${params}`;
 }
-
-// Zip-centroid geocoding (GOAL.md blesses this for v1): RunSignup returns no
-// coordinates, Zippopotam.us maps zip → centroid for free. Cached like every
-// other fetch, so it costs one call per unique zip, ever.
-export type ZippopotamResponse = {
-  places?: { latitude?: string; longitude?: string }[];
-};
-
-export function zippopotamUrl(zip: string): string {
-  return `https://api.zippopotam.us/us/${zip}`;
-}

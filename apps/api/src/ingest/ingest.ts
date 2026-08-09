@@ -1,5 +1,7 @@
 import { db } from "../db/index";
-import { CachedFetcher } from "./fetch";
+import { CachedFetcher } from "../lib/fetch";
+import { geocodeZip } from "../lib/geocode";
+import type { Coords } from "../lib/geocode";
 import { parseDistanceMeters } from "./distance";
 import {
   durationToSeconds,
@@ -17,7 +19,6 @@ import {
   resultSetsUrl,
   resultsUrl,
   searchUrl,
-  zippopotamUrl,
 } from "./runsignup";
 import type {
   RsuRace,
@@ -25,7 +26,6 @@ import type {
   RsuResultSet,
   RsuResultSetsResponse,
   RsuSearchResponse,
-  ZippopotamResponse,
 } from "./runsignup";
 
 // How far back to look for published results. Competitiveness scoring wants
@@ -117,7 +117,7 @@ const upsertRaceResult = db.prepare(
 const upsertRaceTx = db.transaction(
   (
     race: RsuRace,
-    coords: { lat: number; lon: number } | null,
+    coords: Coords | null,
     now: string,
   ): { events: number; pricePeriods: number } => {
     const raceId = `runsignup:${race.race_id}`;
@@ -179,26 +179,6 @@ const upsertRaceTx = db.transaction(
     return { events, pricePeriods };
   },
 );
-
-async function geocodeZip(
-  fetcher: CachedFetcher,
-  cache: Map<string, { lat: number; lon: number } | null>,
-  rawZip: string | null | undefined,
-): Promise<{ lat: number; lon: number } | null> {
-  const zip = rawZip?.trim().slice(0, 5);
-  if (!zip || !/^\d{5}$/.test(zip)) return null;
-  const cached = cache.get(zip);
-  if (cached !== undefined) return cached;
-
-  const data = await fetcher.getJson<ZippopotamResponse>(zippopotamUrl(zip));
-  const place = data?.places?.[0];
-  const lat = Number(place?.latitude);
-  const lon = Number(place?.longitude);
-  const coords =
-    Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
-  cache.set(zip, coords);
-  return coords;
-}
 
 // Fetches all pages of one result set and reduces them to the three numbers
 // race_results keeps. finishers counts every listed result, including ones
@@ -319,7 +299,7 @@ export async function runIngest(
 
   const races = [...byId.values()].slice(0, opts.limit);
   const todayIso = new Date().toISOString().slice(0, 10);
-  const zipCache = new Map<string, { lat: number; lon: number } | null>();
+  const zipCache = new Map<string, Coords | null>();
   const summary: IngestSummary = {
     races: races.length,
     events: 0,

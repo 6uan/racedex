@@ -22,7 +22,7 @@ export class CachedFetcher {
   cacheHits = 0;
   failedFetches = 0;
 
-  private readonly maxAgeMs: number;
+  private readonly defaultMaxAgeHours: number;
   private lastNetworkAt = 0;
 
   private readonly selectNewest = db.prepare(
@@ -34,14 +34,20 @@ export class CachedFetcher {
   );
 
   constructor(maxAgeHours: number) {
-    this.maxAgeMs = maxAgeHours * 3_600_000;
+    this.defaultMaxAgeHours = maxAgeHours;
   }
 
-  async get(url: string): Promise<Fetched> {
+  // maxAgeHours overrides the run-wide TTL for sources with a different
+  // change cadence (e.g. zip centroids, which never move).
+  async get(
+    url: string,
+    maxAgeHours = this.defaultMaxAgeHours,
+  ): Promise<Fetched> {
+    const maxAgeMs = maxAgeHours * 3_600_000;
     const cached = this.selectNewest.get(url) as
       | Pick<FetchCacheRow, "status" | "body" | "fetched_at">
       | undefined;
-    if (cached && Date.now() - Date.parse(cached.fetched_at) < this.maxAgeMs) {
+    if (cached && Date.now() - Date.parse(cached.fetched_at) < maxAgeMs) {
       this.cacheHits += 1;
       return { status: cached.status, body: cached.body, fromCache: true };
     }
@@ -75,8 +81,8 @@ export class CachedFetcher {
 
   // JSON convenience: null on non-200 or a body that doesn't parse, so callers
   // can treat every failure mode as "no data" without try/catch at each site.
-  async getJson<T>(url: string): Promise<T | null> {
-    const { status, body } = await this.get(url);
+  async getJson<T>(url: string, maxAgeHours?: number): Promise<T | null> {
+    const { status, body } = await this.get(url, maxAgeHours);
     if (status !== 200) return null;
     try {
       return JSON.parse(body) as T;
