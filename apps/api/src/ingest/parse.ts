@@ -50,15 +50,6 @@ export function durationToSeconds(
   return Math.round(seconds);
 }
 
-export function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((x, y) => x - y);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1
-    ? sorted[mid]!
-    : Math.round((sorted[mid - 1]! + sorted[mid]!) / 2);
-}
-
 // Good-enough HTML → text for tagger input and display. Block-level closers
 // become newlines so paragraphs survive; entities beyond the common named set
 // are decoded numerically or dropped.

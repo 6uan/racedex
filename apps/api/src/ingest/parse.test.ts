@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   durationToSeconds,
-  median,
   moneyToCents,
   stripHtml,
   usDateTimeParts,
@@ -48,13 +47,6 @@ test("durationToSeconds", () => {
   assert.equal(durationToSeconds("DNF"), null);
   assert.equal(durationToSeconds(""), null);
   assert.equal(durationToSeconds(null), null);
-});
-
-test("median", () => {
-  assert.equal(median([]), null);
-  assert.equal(median([5]), 5);
-  assert.equal(median([3, 1, 2]), 2);
-  assert.equal(median([1, 2, 3, 4]), 3);
 });
 
 test("stripHtml", () => {

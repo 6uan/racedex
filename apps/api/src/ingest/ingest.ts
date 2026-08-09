@@ -2,10 +2,10 @@ import { db } from "../db/index";
 import { CachedFetcher } from "../lib/fetch";
 import { geocodeZip } from "../lib/geocode";
 import type { Coords } from "../lib/geocode";
+import { median } from "../lib/stats";
 import { parseDistanceMeters } from "./distance";
 import {
   durationToSeconds,
-  median,
   moneyToCents,
   stripHtml,
   usDateTimeParts,
@@ -249,6 +249,9 @@ async function ingestResults(
     }
     if (!best) continue;
 
+    // median() is exact; median_seconds is a STRICT INTEGER column, so an
+    // even-count midpoint (x.5) must be rounded here.
+    const medianSeconds = median(best.seconds);
     upsertRaceResult.run({
       raceId: `runsignup:${race.race_id}`,
       sourceEventId: String(event.event_id),
@@ -257,7 +260,7 @@ async function ingestResults(
       distanceM: parseDistanceMeters(event.distance, event.name),
       finishers: best.finishers,
       winnerSeconds: best.seconds.length ? Math.min(...best.seconds) : null,
-      medianSeconds: median(best.seconds),
+      medianSeconds: medianSeconds === null ? null : Math.round(medianSeconds),
       // Full result listings stay in fetch_cache; duplicating thousands of
       // rows per race here would bloat the DB for no reader.
       raw: JSON.stringify({
