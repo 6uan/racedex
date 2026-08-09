@@ -5,7 +5,8 @@
 
 import type { Request, Response } from "express";
 import { db } from "./db/index";
-import type { RaceRow } from "./db/rows";
+import type { RaceRow, WeatherNormalRow } from "./db/rows";
+import { geoKey } from "./weather/normals";
 
 // Per-table row counts + freshness for the summary block. Freshness comes
 // from whichever timestamp column the table has; tables without one just
@@ -36,7 +37,11 @@ const statStmts = TABLES.map(({ name, freshnessCol }) => ({
 // count; at 182 races SQLite runs these instantly.
 const racesStmt = db.prepare(`
   SELECT
-    r.id, r.name, r.url, r.city, r.state, r.next_date, r.lat,
+    r.id, r.name, r.url, r.city, r.state, r.next_date, r.lat, r.lon,
+    (SELECT e.date || 'T' || e.start_time FROM events e
+      WHERE e.race_id = r.id AND e.date IS NOT NULL
+        AND e.start_time IS NOT NULL AND e.start_time != '00:00'
+      ORDER BY e.date, e.start_time LIMIT 1) AS first_start,
     (SELECT COUNT(*) FROM events e WHERE e.race_id = r.id) AS events_n,
     (SELECT GROUP_CONCAT(DISTINCT e.distance_m) FROM events e
       WHERE e.race_id = r.id AND e.distance_m IS NOT NULL) AS distances,
@@ -51,14 +56,41 @@ const racesStmt = db.prepare(`
 
 type DebugRaceRow = Pick<
   RaceRow,
-  "id" | "name" | "url" | "city" | "state" | "next_date" | "lat"
+  "id" | "name" | "url" | "city" | "state" | "next_date" | "lat" | "lon"
 > & {
+  first_start: string | null; // earliest real gun time, '2026-10-17T07:30'
   events_n: number;
   distances: string | null; // comma-joined distance_m values
   price_min: number | null;
   price_max: number | null;
   results_n: number;
 };
+
+// All normals load into one Map per render (a few thousand small rows) and
+// races look up their cell in JS — the grid key must come from the same
+// geoKey() the pipeline writes with, and re-rounding floats in SQL could
+// disagree with toFixed on edge cases.
+const normalsStmt = db.prepare(
+  "SELECT geo_key, month_day, hour, temp_f, dew_point_f, heat_score FROM weather_normals",
+);
+
+type DebugNormal = Pick<
+  WeatherNormalRow,
+  "geo_key" | "month_day" | "hour" | "temp_f" | "dew_point_f" | "heat_score"
+>;
+
+// The normal shown for a race is its first gun time's cell/day/hour; minutes
+// truncate to the top of the hour ('07:30' → hour 7), matching the pipeline.
+function raceNormal(
+  r: DebugRaceRow,
+  normals: Map<string, DebugNormal>,
+): DebugNormal | undefined {
+  if (r.lat === null || r.lon === null || r.first_start === null)
+    return undefined;
+  const monthDay = r.first_start.slice(5, 10);
+  const hour = Number(r.first_start.slice(11, 13));
+  return normals.get(`${geoKey(r.lat, r.lon)}|${monthDay}|${hour}`);
+}
 
 // Race names and URLs are upstream text — escape everything interpolated
 // into the page, even on an internal debug view.
@@ -96,7 +128,11 @@ function money(cents: number): string {
   return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
 }
 
-function raceTr(r: DebugRaceRow): string {
+function degrees(f: number | null): string {
+  return f === null ? NULL_CELL : `${Math.round(f)}°`;
+}
+
+function raceTr(r: DebugRaceRow, normals: Map<string, DebugNormal>): string {
   const name = r.url
     ? `<a href="${esc(r.url)}">${esc(r.name)}</a>`
     : esc(r.name);
@@ -115,6 +151,7 @@ function raceTr(r: DebugRaceRow): string {
       : r.price_min === r.price_max
         ? money(r.price_min)
         : `${money(r.price_min)}–${money(r.price_max)}`;
+  const normal = raceNormal(r, normals);
   return `<tr>
     <td><code>${esc(r.id)}</code></td>
     <td>${name}</td>
@@ -124,6 +161,9 @@ function raceTr(r: DebugRaceRow): string {
     <td>${distances}</td>
     <td class="num">${price}</td>
     <td class="num">${r.results_n || NULL_CELL}</td>
+    <td class="num">${degrees(normal?.temp_f ?? null)}</td>
+    <td class="num">${degrees(normal?.dew_point_f ?? null)}</td>
+    <td class="num">${normal?.heat_score ?? NULL_CELL}</td>
     <td>${r.lat === null ? NULL_CELL : "✓"}</td>
   </tr>`;
 }
@@ -141,6 +181,12 @@ function renderPage(): string {
     return { name, ...row };
   });
   const races = racesStmt.all() as DebugRaceRow[];
+  const normals = new Map(
+    (normalsStmt.all() as DebugNormal[]).map((n) => [
+      `${n.geo_key}|${n.month_day}|${n.hour}`,
+      n,
+    ]),
+  );
 
   return `<!doctype html>
 <html lang="en">
@@ -153,7 +199,7 @@ function renderPage(): string {
   .meta { color: #666; margin: 4px 0 20px; }
   table { border-collapse: collapse; margin-bottom: 28px; }
   th, td { border: 1px solid #ddd; padding: 4px 10px; text-align: left; }
-  th { background: #f4f4f4; position: sticky; top: 0; }
+  th { background: #f4f4f4; position: sticky; top: 0; white-space: nowrap; }
   tbody tr:nth-child(even) { background: #fafafa; }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   .null { color: #aaa; }
@@ -174,9 +220,10 @@ function renderPage(): string {
   <thead><tr>
     <th>id</th><th>name</th><th>where</th><th>next date</th>
     <th class="num">events</th><th>distances</th><th class="num">price</th>
-    <th class="num">results</th><th>geo</th>
+    <th class="num">results</th><th class="num">temp</th>
+    <th class="num">dew pt</th><th class="num">heat</th><th>geo</th>
   </tr></thead>
-  <tbody>${races.map(raceTr).join("\n")}</tbody>
+  <tbody>${races.map((r) => raceTr(r, normals)).join("\n")}</tbody>
 </table>
 </body>
 </html>`;
