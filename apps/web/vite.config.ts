@@ -22,6 +22,9 @@ export default defineConfig({
     allowedHosts: ["racedex.ipsum.studio"],
     proxy: {
       "/api": `http://localhost:${API_PORT}`,
+      // Server-rendered debug page (apps/api/src/debug.ts). Proxied so it
+      // shares the app's origin and works at racedex.ipsum.studio/debug.
+      "/debug": `http://localhost:${API_PORT}`,
     },
   },
 });
