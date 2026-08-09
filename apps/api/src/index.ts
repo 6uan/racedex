@@ -1,5 +1,6 @@
 import express from "express";
 import { APP_NAME } from "@racedex/shared";
+import { migrationCount } from "./db/index";
 
 const app = express();
 // Default mirrors the port registry in infra's Caddyfile (racedex lane:
@@ -7,7 +8,7 @@ const app = express();
 const port = Number(process.env.API_PORT ?? 3401);
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, app: APP_NAME });
+  res.json({ ok: true, app: APP_NAME, migrations: migrationCount() });
 });
 
 app.listen(port, () => {
