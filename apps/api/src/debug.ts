@@ -38,6 +38,7 @@ const statStmts = TABLES.map(({ name, freshnessCol }) => ({
 const racesStmt = db.prepare(`
   SELECT
     r.id, r.name, r.url, r.city, r.state, r.next_date, r.lat, r.lon,
+    r.tags, r.tag_meta,
     (SELECT e.date || 'T' || e.start_time FROM events e
       WHERE e.race_id = r.id AND e.date IS NOT NULL
         AND e.start_time IS NOT NULL AND e.start_time != '00:00'
@@ -56,7 +57,16 @@ const racesStmt = db.prepare(`
 
 type DebugRaceRow = Pick<
   RaceRow,
-  "id" | "name" | "url" | "city" | "state" | "next_date" | "lat" | "lon"
+  | "id"
+  | "name"
+  | "url"
+  | "city"
+  | "state"
+  | "next_date"
+  | "lat"
+  | "lon"
+  | "tags"
+  | "tag_meta"
 > & {
   first_start: string | null; // earliest real gun time, '2026-10-17T07:30'
   events_n: number;
@@ -123,6 +133,39 @@ function distanceLabel(m: number): string {
   return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}K`;
 }
 
+// tags / tag_meta are JSON TEXT written by the tag pipeline; parse defensively
+// so a bad row degrades to "—" instead of taking down the page.
+function parseJson<T>(text: string | null): T | null {
+  if (text === null) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+type TagMeta = {
+  provider: string;
+  model: string;
+  prompt_version: number;
+  tagged_at: string;
+  error?: string;
+};
+
+function tagCells(r: DebugRaceRow): string {
+  const meta = parseJson<TagMeta>(r.tag_meta);
+  const tags = parseJson<string[]>(r.tags);
+  const tagsCell = tags?.length ? esc(tags.join(", ")) : NULL_CELL;
+  const metaCell =
+    meta === null
+      ? NULL_CELL
+      : meta.error
+        ? `<span class="err" title="${esc(meta.model)} · ${esc(meta.tagged_at)}">${esc(meta.error)}</span>`
+        : `<span title="${esc(meta.model)} · ${esc(meta.tagged_at)}">${esc(meta.provider)} v${meta.prompt_version}</span>`;
+  return `<td>${tagsCell}</td>
+    <td>${metaCell}</td>`;
+}
+
 function money(cents: number): string {
   const dollars = cents / 100;
   return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
@@ -161,6 +204,7 @@ function raceTr(r: DebugRaceRow, normals: Map<string, DebugNormal>): string {
     <td>${distances}</td>
     <td class="num">${price}</td>
     <td class="num">${r.results_n || NULL_CELL}</td>
+    ${tagCells(r)}
     <td class="num">${degrees(normal?.temp_f ?? null)}</td>
     <td class="num">${degrees(normal?.dew_point_f ?? null)}</td>
     <td class="num">${normal?.heat_score ?? NULL_CELL}</td>
@@ -203,6 +247,7 @@ function renderPage(): string {
   tbody tr:nth-child(even) { background: #fafafa; }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   .null { color: #aaa; }
+  .err { color: #b91c1c; }
   code { font-size: 12px; }
   a { color: #0550ae; }
 </style>
@@ -220,7 +265,7 @@ function renderPage(): string {
   <thead><tr>
     <th>id</th><th>name</th><th>where</th><th>next date</th>
     <th class="num">events</th><th>distances</th><th class="num">price</th>
-    <th class="num">results</th><th class="num">temp</th>
+    <th class="num">results</th><th>tags</th><th>tagger</th><th class="num">temp</th>
     <th class="num">dew pt</th><th class="num">heat</th><th>geo</th>
   </tr></thead>
   <tbody>${races.map((r) => raceTr(r, normals)).join("\n")}</tbody>
