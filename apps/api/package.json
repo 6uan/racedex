@@ -10,6 +10,7 @@
     "ingest": "tsx src/ingest/cli.ts",
     "weather": "tsx src/weather/cli.ts",
     "tag": "tsx src/tag/cli.ts",
+    "score": "tsx src/score/cli.ts",
     "test": "tsx --test",
     "typecheck": "tsc --noEmit"
   },

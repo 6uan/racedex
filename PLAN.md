@@ -93,6 +93,57 @@ one person compose better as commands (`pnpm tag --provider local --limit
 20`), and read-only observability lives in the `/debug` page until the real
 UI exists.
 
+## Competitiveness: one score, its inputs stored beside it
+
+The score answers "is this a real race or a stroller parade?" on 0–100, from
+the three facts RunSignup's results endpoints actually give us, each weighted
+by how much we trust it:
+
+| Component | Weight | Band | Why |
+|---|---|---|---|
+| Field size | 0.4 | log, 25 → 2500 finishers | The one input with no parsing risk. Log because 25→250 says as much as 250→2500 |
+| Winner pace | 0.35 | 0.6–1.0 × a 15:00 5K, Riegel-scaled to the distance | Where a local race stops being a fun run |
+| Depth | 0.25 | median finish 2.6× → 1.5× the winner | Dimensionless, so it works at any distance. Least weight: one slow winner skews the whole ratio |
+
+Decisions worth their own line:
+
+- **The scoring unit is the race's biggest event**, not the race — field size,
+  winner and median all describe the same start line instead of blending a 5K
+  with the half beside it. Editions group by parsed distance (event ids and
+  names churn year to year; distances don't), and by event name where the
+  distance never parsed, which keeps a race's triathlon and duathlon apart.
+  Medians across years, per the median-not-mean habit.
+- **Missing components renormalize, they don't score zero.** A race with no
+  parsed distance is scored on field + depth over `0.65`, not punished for a
+  gap in our parser.
+- **Components drop out when the number behind them is a tautology.** Depth
+  needs at least 10 finishers: at a field of one the median *is* the winner, a
+  free 1.0× that scored four-person charity walks as the deepest fields in the
+  county before the floor went in.
+- **The pace component is gated on plausibility, not trusted.** Outside
+  0.4–1.1 × the benchmark the row isn't a running result: above it sit
+  triathlons whose "distance" is swim+bike+run summed and virtual races where
+  someone logged a 3:52 5K; below it sit mis-parsed distances. Those drop the
+  component instead of scoring 100 or 0. The fastest real local winner in the
+  data sits at 1.04, so the gate has headroom.
+- **The scale is absolute, not a curve over this metro.** Nothing in South
+  Florida currently breaks 80; a genuinely elite field would. A relative scale
+  would silently redefine "competitive" every time the DB grows.
+- **`competitiveness_inputs` stores every number that produced the score** —
+  components, raw medians, benchmark, weights, years, and a `version` to bump
+  when a band moves. A bare `73` is not something a runner should have to
+  trust blind, and the UI is expected to show the why.
+- **The stage always recomputes.** No network, no tokens, milliseconds for the
+  whole table — so there's nothing to skip, it's safe to re-run after any band
+  change, and it's the only way the NULL state stays truthful when results
+  change upstream. Stale scores for races whose results vanished are cleared
+  in the same transaction.
+
+Two thirds of races (116 of 182 today) publish no results at all. That NULL is
+the majority case, not an edge case: it is stored as NULL rather than 0, and
+`/debug` shows `—` for "nothing published" versus `n/a` for "published, but
+nothing usable in it".
+
 ## Deliberately out (v1)
 
 Course elevation/USATF data, second listing sources, email alerts, reviews,

@@ -6,6 +6,7 @@
 import type { Request, Response } from "express";
 import { db } from "./db/index";
 import type { RaceRow, WeatherNormalRow } from "./db/rows";
+import type { CompetitivenessInputs } from "./score/competitiveness";
 import { geoKey } from "./weather/normals";
 
 // Per-table row counts + freshness for the summary block. Freshness comes
@@ -38,7 +39,7 @@ const statStmts = TABLES.map(({ name, freshnessCol }) => ({
 const racesStmt = db.prepare(`
   SELECT
     r.id, r.name, r.url, r.city, r.state, r.next_date, r.lat, r.lon,
-    r.tags, r.tag_meta,
+    r.tags, r.tag_meta, r.competitiveness, r.competitiveness_inputs,
     (SELECT e.date || 'T' || e.start_time FROM events e
       WHERE e.race_id = r.id AND e.date IS NOT NULL
         AND e.start_time IS NOT NULL AND e.start_time != '00:00'
@@ -67,6 +68,8 @@ type DebugRaceRow = Pick<
   | "lon"
   | "tags"
   | "tag_meta"
+  | "competitiveness"
+  | "competitiveness_inputs"
 > & {
   first_start: string | null; // earliest real gun time, '2026-10-17T07:30'
   events_n: number;
@@ -166,6 +169,50 @@ function tagCells(r: DebugRaceRow): string {
     <td>${metaCell}</td>`;
 }
 
+// Seconds → 16:29 / 1:12:04. Race times, so hours only appear when earned.
+function clock(seconds: number): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.round(seconds % 60);
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+// The score is only useful next to its reasons, so the components and the raw
+// numbers ride along in the title — the same "show the why" the race card will
+// do properly. Two distinct empty states: no results published at all (—) vs
+// results that held nothing scorable (n/a).
+function scoreCell(r: DebugRaceRow): string {
+  if (r.competitiveness === null) {
+    return r.results_n > 0
+      ? `<td class="num"><span class="null" title="results published, but no usable numbers in them">n/a</span></td>`
+      : `<td class="num">${NULL_CELL}</td>`;
+  }
+  const inputs = parseJson<CompetitivenessInputs>(r.competitiveness_inputs);
+  if (inputs === null) return `<td class="num">${r.competitiveness}</td>`;
+
+  const { components: c, years } = inputs;
+  const part = (label: string, value: number | null) =>
+    `${label} ${value === null ? "n/a" : value}`;
+  const span = years.length
+    ? ` (${years[0] === years.at(-1) ? years[0] : `${years[0]}–${years.at(-1)}`})`
+    : "";
+  const facts = [
+    inputs.field_size === null ? null : `${inputs.field_size} finishers`,
+    inputs.winner_seconds === null
+      ? null
+      : `winner ${clock(inputs.winner_seconds)}`,
+    inputs.median_seconds === null
+      ? null
+      : `median ${clock(inputs.median_seconds)}`,
+  ].filter(Boolean);
+  const why = `${part("field", c.field)} · ${part("pace", c.pace)} · ${part(
+    "depth",
+    c.depth,
+  )}\n${inputs.event_name ?? "?"}${span}: ${facts.join(", ")}`;
+  return `<td class="num"><span title="${esc(why)}">${r.competitiveness}</span></td>`;
+}
+
 function money(cents: number): string {
   const dollars = cents / 100;
   return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
@@ -204,6 +251,7 @@ function raceTr(r: DebugRaceRow, normals: Map<string, DebugNormal>): string {
     <td>${distances}</td>
     <td class="num">${price}</td>
     <td class="num">${r.results_n || NULL_CELL}</td>
+    ${scoreCell(r)}
     ${tagCells(r)}
     <td class="num">${degrees(normal?.temp_f ?? null)}</td>
     <td class="num">${degrees(normal?.dew_point_f ?? null)}</td>
@@ -265,7 +313,8 @@ function renderPage(): string {
   <thead><tr>
     <th>id</th><th>name</th><th>where</th><th>next date</th>
     <th class="num">events</th><th>distances</th><th class="num">price</th>
-    <th class="num">results</th><th>tags</th><th>tagger</th><th class="num">temp</th>
+    <th class="num">results</th><th class="num">score</th>
+    <th>tags</th><th>tagger</th><th class="num">temp</th>
     <th class="num">dew pt</th><th class="num">heat</th><th>geo</th>
   </tr></thead>
   <tbody>${races.map((r) => raceTr(r, normals)).join("\n")}</tbody>
