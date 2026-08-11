@@ -2,11 +2,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-// pnpm --filter @racedex/api tag [-- --provider anthropic --limit 5 --dry-run]
+// pnpm --filter @racedex/api tag [-- --provider openai --limit 5 --dry-run]
 //
 // --dry-run lists the races that would be tagged and a rough cost estimate
 // without touching the network or the DB. --limit N tags only the first N
 // untagged races. Flagged races (schema-invalid) are skipped on later runs.
+//
+// Provider selection and the openai provider's model/base URL come from
+// TAGGER_PROVIDER / TAGGER_MODEL / TAGGER_BASE_URL (.env), overridable here
+// with --provider / --model / --base-url (#7).
 
 // First secret in the project (ANTHROPIC_API_KEY): loaded with Node's native
 // env-file support — no dotenv dependency (PLAN.md). Vars already present in
@@ -25,7 +29,12 @@ const { values } = parseArgs({
   // pnpm forwards a literal "--" separator; drop it so flags after it parse.
   args: process.argv.slice(2).filter((arg) => arg !== "--"),
   options: {
-    provider: { type: "string", default: "anthropic" },
+    provider: {
+      type: "string",
+      default: process.env.TAGGER_PROVIDER ?? "anthropic",
+    },
+    model: { type: "string" },
+    "base-url": { type: "string" },
     limit: { type: "string" },
     "dry-run": { type: "boolean", default: false },
   },
@@ -34,17 +43,25 @@ const { values } = parseArgs({
 const limit = values.limit === undefined ? undefined : Number(values.limit);
 
 if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) {
-  console.error("usage: tag [--provider anthropic] [--limit N] [--dry-run]");
+  console.error(
+    "usage: tag [--provider anthropic|openai] [--model M] [--base-url URL] [--limit N] [--dry-run]",
+  );
   process.exit(1);
 }
 
 // Imported after loadEnvFile on principle, though providers only read env
-// when constructed. Registry grows with the OpenAI-compatible provider (#7).
+// when constructed.
 const { selectCandidates, runTag } = await import("./tag");
 const { createAnthropicProvider } = await import("./anthropic");
+const { createOpenAICompatProvider } = await import("./openai");
 
 const providers: Record<string, () => import("./provider").TagProvider> = {
   anthropic: createAnthropicProvider,
+  openai: () =>
+    createOpenAICompatProvider({
+      model: values.model,
+      baseUrl: values["base-url"],
+    }),
 };
 
 const createProvider = providers[values.provider];

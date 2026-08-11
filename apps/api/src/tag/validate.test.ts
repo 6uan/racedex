@@ -19,7 +19,6 @@ function fakeProvider(responses: unknown[]): TagProvider & { calls: number } {
   const provider = {
     name: "fake",
     model: "fake-1",
-    promptVersion: 1,
     calls: 0,
     async tagRace() {
       const response = responses[provider.calls];
@@ -73,4 +72,17 @@ test("empty tags array is a valid result", async () => {
   const provider = fakeProvider([{ tags: [] }]);
   const outcome = await tagWithRetry(provider, input);
   assert.deepEqual(outcome, { status: "tagged", tags: [], attempts: 1 });
+});
+
+test("more items than the vocabulary is invalid, not deduped away", async () => {
+  // TagResultSchema caps the array at TAG_VALUES.length (#7) so emitted JSON
+  // schemas carry maxItems — the guard against grammar-engine array runaways.
+  // A response over the cap is pathological output and gets flagged; dedupe
+  // (normalize) only ever sees arrays that passed the gate.
+  const provider = fakeProvider([
+    { tags: Array(15).fill("road") },
+    { tags: Array(15).fill("road") },
+  ]);
+  const outcome = await tagWithRetry(provider, input);
+  assert.deepEqual(outcome, { status: "invalid", attempts: 2 });
 });

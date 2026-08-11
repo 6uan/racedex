@@ -32,7 +32,14 @@ export type Tag = z.infer<typeof TagSchema>;
 
 // Root must be an object for structured outputs; an extra wrapper also leaves
 // room to grow (e.g. a confidence field) without re-shaping the column.
+//
+// .max() puts maxItems into every JSON schema emitted from this object:
+// grammar engines compile an unbounded array into a runaway-capable grammar
+// (a model can repeat valid enum values forever), and uniqueItems — the
+// constraint that would actually express "a set" — is ignored by every
+// engine tested (RESULTS.md on the 3090 box). A closed vocabulary can't
+// exceed its own size, so the cap costs nothing semantically.
 export const TagResultSchema = z.object({
-  tags: z.array(TagSchema),
+  tags: z.array(TagSchema).max(TAG_VALUES.length),
 });
 export type TagResult = z.infer<typeof TagResultSchema>;
