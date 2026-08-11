@@ -144,6 +144,101 @@ the majority case, not an edge case: it is stored as NULL rather than 0, and
 `/debug` shows `—` for "nothing published" versus `n/a` for "published, but
 nothing usable in it".
 
+## URLs: two route shapes, one pure slug function
+
+Two route types solving two different problems, deliberately not the same shape:
+
+| | shape | solves |
+|---|---|---|
+| **Index** | `/south-florida/5k` | SEO volume — people search distance+metro, not race names |
+| **Detail** | `/south-florida/turkey-trot-12345` | stable identity, no collisions |
+
+**The slug is a pure function of one race.** Rebuildability means a stored slug
+column would be destroyed by a routine migration, and protecting it would create
+a second irreplaceable table — contradicting "`fetch_cache` is the only
+irreplaceable table". So the slug derives from the race's own name plus its
+natural key: no persisted state, no counters, no insertion order.
+
+That rules out the usual collision fix. A conditional `-2` suffix depends on what
+else is in the corpus, so ingesting a second race can silently change the first
+one's URL. Instead the natural-key discriminator is **always** appended and
+collisions become impossible by construction. The corpus has three live editions
+of *Sunrise Marathon 5K/10K/13.1 MIAMI*; they get three URLs and a fourth edition
+moves none of them.
+
+Detail pages **resolve on the trailing ID and canonicalize on the name**:
+`/south-florida/anything-at-all-12345` finds race `12345` and 301s if the name
+portion is stale. The common case is not duplicate names — it is RunSignup
+renaming a race between ingests, and old links keep working instead of 404ing.
+
+**No distance in the detail path.** At ~3.9 events per race a race is not a
+distance; any rule for picking one (shortest? biggest field?) reads off an event
+set that changes between ingests, and `/5k/x` plus `/10k/x` resolving to one page
+splits link equity. Also rejected: the year (kills every URL annually; each
+edition is already a distinct RunSignup ID) and the city.
+
+**The metro segment is `south-florida`, and it is not read from `races.city`.**
+The corpus spans Miami-Dade (78), Broward (76), Palm Beach (25) and Monroe (3) —
+Lake Worth is 60mi out, Key Largo 73mi, so `/miami/` would be locally wrong for
+14% of it. City strings are also untrustworthy: one race carries
+`city = 'Saint Petersburg'` at lat 25.985, which is Aventura. Metro is true by
+construction for every race, which makes the null-city case and the bad-city case
+the same non-problem. A later `/miami` / `/fort-lauderdale` split adds children
+rather than moving these URLs.
+
+**Distance buckets are closed bands, never open-ended.** The bands exist less for
+tolerance than to keep non-running distances out of running indexes: the corpus
+holds an Olympic Aquabike at 41,360m (835m under a marathon), an Olympic
+Triathlon at 51,338m (338m over a 50K, and a swim+bike+run sum), 35 "Step/Ride
+40K/70K/90K" virtual challenges, and a 1,500m open-water swim. An open `>43000`
+"ultra" bucket collects eight races of which one is a running race. Out-of-band
+is `null`, consistent with `parseDistanceMeters` never guessing — 26 races (stair
+climbs, curling, a plane pull) land on no index page and reach users only through
+their detail URL.
+
+**An index route needs 10 upcoming races; four buckets qualify** — `5k` (152),
+`10k` (62), `mile` (45), `half-marathon` (41). The next bucket down has 4. Any
+threshold from 5 to 40 picks the same four, so the number is not load-bearing and
+won't need re-tuning each ingest. The list is a **hand-checked constant,
+evaluated at review time, not per request** — a data-driven threshold makes a URL
+404 one week and 200 the next, which is the worst signal to send Google. Same
+reasoning as the competitiveness scale being absolute rather than a curve over
+this metro.
+
+**Below-threshold distances are filters, not URLs.** `/south-florida/marathon`
+404s; `/south-florida?distance=marathon` works and is `noindex, follow`. The
+API's `distance` param accepts the full 12-slug vocabulary — the URL space is
+narrower than the API surface on purpose.
+
+**Index pages list races that *have* an event at that distance**, via `EXISTS`
+over `events`, not a column on `races`. The 111-event *Move for Hope* race
+legitimately appears on `/5k`, `/10k` and `/half-marathon`. The list card must
+therefore show which events matched — filter to 5K, get "Miami Marathon Weekend",
+and without a visible `5K · 10K · Half` line the filter looks broken.
+
+**A second source never takes a URL from the first.** RunSignup mints bare
+trailing digits (`-12345`); any later source gets a registered code and a
+prefixed form (`-ac12345`), so bare-digit URLs stay grandfathered and nothing
+already published has to move. When both sources list the same race, two
+decisions stay separate: *are these the same race* is fuzzy and derived — cheap
+deterministic blocking on date plus proximity first (name+city alone would wrongly
+merge 13 corpus races into 6; adding the date drops collisions to zero), with a
+tagger-style provider call only on the ambiguous middle band, and hand corrections
+living in a checked-in file rather than a precious table. *Which URL serves* is
+never a judgment call: **source priority, then earliest `first_seen_at` — never
+data richness, never a human, never a model.** Richness changes between ingests
+and would make the canonical URL ping-pong, the same purity violation as a
+conditional suffix; it decides merged field *content* instead. The loser 301s to
+the winner, reusing the rename machinery. Implementation is post-v1; the rule is
+recorded now because leaving it open is what would break v1's URLs later.
+
+**Series URLs are post-v1 and the shape is reserved.**
+`/south-florida/turkey-trot` redirecting to the current edition is additive, not a
+reshape — and a 302 target may depend on corpus state where a canonical URL may
+not, so series membership can be derived from name-slug equality without
+violating the purity rule. Two things keep it open: detail URLs always end in
+`-<digits>`, and the 12 bucket slugs are reserved words in the metro namespace.
+
 ## Deliberately out (v1)
 
 Course elevation/USATF data, second listing sources, email alerts, reviews,
