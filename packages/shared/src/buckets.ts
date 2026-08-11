@@ -76,3 +76,18 @@ export function distanceBucket(meters: number | null | undefined): BucketSlug | 
   const hit = DISTANCE_BUCKETS.find((b) => meters >= b.min && meters <= b.max);
   return hit ? hit.slug : null;
 }
+
+// Display inverse of the pipeline's parseDistanceMeters, and deliberately NOT
+// bucket-based: an event has to be printable whether or not it landed in a
+// band, so the 8690m "5.4 Funky Run" reads "8.7K" rather than vanishing.
+// Canonical race distances get their household names, then anything that
+// divides evenly into kilometres or miles gets that unit, and the rest falls
+// back to one decimal.
+export function distanceLabel(meters: number): string {
+  if (meters === 21097) return "Half";
+  if (meters === 42195) return "Marathon";
+  if (meters % 1000 === 0) return `${meters / 1000}K`;
+  const miles = meters / 1609.344;
+  if (Math.abs(miles - Math.round(miles)) < 0.01) return `${Math.round(miles)}mi`;
+  return meters < 1000 ? `${meters}m` : `${(meters / 1000).toFixed(1)}K`;
+}

@@ -4,6 +4,7 @@
 // whole page is deleted in the final polish issue (#13).
 
 import type { Request, Response } from "express";
+import { distanceLabel } from "@racedex/shared";
 import { db } from "./db/index";
 import type { RaceRow, WeatherNormalRow } from "./db/rows";
 import type { CompetitivenessInputs } from "./score/competitiveness";
@@ -122,18 +123,6 @@ function age(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   if (mins < 48 * 60) return `${Math.round(mins / 60)}h ago`;
   return `${Math.round(mins / (24 * 60))}d ago`;
-}
-
-// Display inverse of ingest's parseDistanceMeters: canonical race distances
-// get their household names, everything else shows in the unit it divides
-// evenly into.
-function distanceLabel(m: number): string {
-  if (m === 21097) return "Half";
-  if (m === 42195) return "Marathon";
-  if (m % 1000 === 0) return `${m / 1000}K`;
-  const miles = m / 1609.344;
-  if (Math.abs(miles - Math.round(miles)) < 0.01) return `${Math.round(miles)}mi`;
-  return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}K`;
 }
 
 // tags / tag_meta are JSON TEXT written by the tag pipeline; parse defensively

@@ -72,9 +72,19 @@ function truncateOnWord(slug: string): string {
  * should 301 here — covers both a duplicate name and a RunSignup rename.
  */
 export function raceUrl(race: { id: string; name: string }): string {
+  return `/${METRO_SLUG}/${raceSegment(race)}`;
+}
+
+/**
+ * Just the identifying segment — what parseRaceUrl reads back. Split out
+ * because the read API mints its own canonical path (`/api/races/<segment>`)
+ * off the same rule, and string-splitting a web path to get there would let
+ * the two drift.
+ */
+export function raceSegment(race: { id: string; name: string }): string {
   const [source, sourceRaceId] = splitNaturalKey(race.id);
   const code = codeForSource(source);
-  return `/${METRO_SLUG}/${raceSlug(race.name)}-${code}${sourceRaceId}`;
+  return `${raceSlug(race.name)}-${code}${sourceRaceId}`;
 }
 
 /**
