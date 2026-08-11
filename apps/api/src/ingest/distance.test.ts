@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseDistanceMeters } from "./distance";
 
-test("distance pattern table", () => {
+test("distances parse from event text; ambiguous ones stay null", () => {
   const cases: [string, number | null][] = [
     ["5K Run", 5000],
     ["5k", 5000],
