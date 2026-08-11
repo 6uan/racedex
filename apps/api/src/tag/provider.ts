@@ -17,7 +17,6 @@ export type TagProvider = {
   /** Provenance, recorded per race in races.tag_meta. */
   name: string;
   model: string;
-  promptVersion: number;
   /** Raw model output — the caller validates it, never the provider. */
   tagRace(input: TagInput): Promise<unknown>;
 };

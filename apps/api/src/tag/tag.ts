@@ -1,4 +1,5 @@
 import { db } from "../db/index";
+import { PROMPT_VERSION } from "./prompt";
 import type { TagInput, TagProvider } from "./provider";
 import { tagWithRetry, type TagOutcome } from "./validate";
 
@@ -75,10 +76,13 @@ export async function runTag(
   };
 
   for (const { id, ...input } of candidates) {
+    // Stamped here, not read off the provider: every provider sends the same
+    // prompt.ts, so a per-provider field would only ever be a way to record
+    // the wrong version.
     const meta = {
       provider: provider.name,
       model: provider.model,
-      prompt_version: provider.promptVersion,
+      prompt_version: PROMPT_VERSION,
       tagged_at: new Date().toISOString(),
     };
     let outcome: TagOutcome;
