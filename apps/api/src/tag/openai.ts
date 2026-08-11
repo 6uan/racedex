@@ -3,14 +3,17 @@ import { TagResultSchema } from "@racedex/shared";
 import { SYSTEM } from "./prompt";
 import { renderTagInput, type TagProvider } from "./provider";
 
-// One OpenAI-compatible client covers OpenAI itself, the 3090 box over the
-// tailnet (llama-swap/llama-server, Ollama), vLLM, and most other providers
-// (#7). A single POST per race — plain fetch, no SDK dependency.
+// One client for any endpoint speaking the OpenAI /v1 chat-completions
+// protocol (#7). A single POST per race — plain fetch, no SDK dependency.
+//
+// Verified against a self-hosted llama-server. api.openai.com is UNTESTED:
+// its strict mode rejects unsupported schema keywords, and TagResultSchema
+// now emits maxItems — check that before adding OpenAI as a real provider.
 //
 // Config: CLI flags (cli.ts) > TAGGER_MODEL / TAGGER_BASE_URL / TAGGER_API_KEY
-// env vars > defaults. The default model is the promoted quality tagger:
+// env vars > defaults. The default model is the one the eval promoted:
 // qwen3.6:27b scored F1 0.890 against an Opus 5 reference — above the
-// deployed Haiku tagger's 0.851 (eval on the 3090 box, RESULTS.md).
+// deployed Haiku tagger's 0.851 (see the tagger eval, #7).
 export const DEFAULT_MODEL = "qwen3.6:27b";
 
 // The same Zod object every provider validates against, emitted as JSON
