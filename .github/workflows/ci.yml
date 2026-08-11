@@ -8,6 +8,13 @@ on:
   push:
     branches: [main]
 
+# A new push to a PR makes the in-flight run's answer obsolete — cancel it
+# rather than pay for it. Keyed per ref, and never on main, where every
+# commit's result is a record worth keeping.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
