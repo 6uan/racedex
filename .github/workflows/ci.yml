@@ -1,0 +1,28 @@
+name: CI
+
+# Runs the same two commands a human would: pnpm typecheck, pnpm test.
+# Both are pure — no DB, no network, no secrets — so there is nothing to
+# provision here. Keep it that way; a check that needs setup gets skipped.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Before setup-node, so `cache: pnpm` can find the store. pnpm's version
+      # comes from packageManager in package.json — don't pin it twice.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
