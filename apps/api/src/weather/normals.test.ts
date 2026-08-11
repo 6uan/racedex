@@ -2,14 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { geoKey, heatScore, sampleDates } from "./normals";
 
-test("geoKey", () => {
+test("geoKey rounds to a 2dp grid cell and never emits -0.00", () => {
   assert.equal(geoKey(25.7867, -80.18), "25.79,-80.18");
   assert.equal(geoKey(26.1793, -80.2746), "26.18,-80.27");
   assert.equal(geoKey(25.7, -80.2), "25.70,-80.20");
   assert.equal(geoKey(-0.001, 0.001), "0.00,0.00");
 });
 
-test("sampleDates", () => {
+test("sampleDates walks back N years and drops dates that never existed", () => {
   assert.deepEqual(sampleDates("10-17", 2026, 3), [
     "2023-10-17",
     "2024-10-17",
@@ -24,7 +24,7 @@ test("sampleDates", () => {
   ]);
 });
 
-test("heatScore", () => {
+test("heatScore bands dew point into 1-5, null when unknown", () => {
   assert.equal(heatScore(null), null);
   assert.equal(heatScore(48), 1);
   assert.equal(heatScore(55), 1);

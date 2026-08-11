@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { median } from "./stats";
 
-test("median", () => {
+test("median averages the middle pair on even input, null on empty", () => {
   assert.equal(median([]), null);
   assert.equal(median([5]), 5);
   assert.equal(median([3, 1, 2]), 2);

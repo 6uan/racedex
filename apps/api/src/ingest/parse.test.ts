@@ -9,14 +9,14 @@ import {
   usDateToIso,
 } from "./parse";
 
-test("usDateToIso", () => {
+test("usDateToIso converts M/D/YYYY and rejects every other format", () => {
   assert.equal(usDateToIso("10/17/2026"), "2026-10-17");
   assert.equal(usDateToIso("7/4/2026"), "2026-07-04");
   assert.equal(usDateToIso("Oct 17, 2026"), null);
   assert.equal(usDateToIso(null), null);
 });
 
-test("usDateTimeParts / usDateTimeToIso", () => {
+test("date-time parsing needs both halves and zero-pads the hour", () => {
   assert.deepEqual(usDateTimeParts("10/17/2026 07:30"), {
     date: "2026-10-17",
     time: "07:30",
@@ -30,7 +30,7 @@ test("usDateTimeParts / usDateTimeToIso", () => {
   assert.equal(usDateTimeToIso(null), null);
 });
 
-test("moneyToCents", () => {
+test("moneyToCents reads commas and bare dollars, nulls non-numeric", () => {
   assert.equal(moneyToCents("$15.00"), 1500);
   assert.equal(moneyToCents("$1,250.50"), 125050);
   assert.equal(moneyToCents("$0.00"), 0);
@@ -39,7 +39,7 @@ test("moneyToCents", () => {
   assert.equal(moneyToCents(null), null);
 });
 
-test("durationToSeconds", () => {
+test("durationToSeconds rounds fractions and reads mm:ss or h:mm:ss", () => {
   assert.equal(durationToSeconds("18:30.02"), 1110);
   assert.equal(durationToSeconds("18:40.9"), 1121);
   assert.equal(durationToSeconds("1:02:33"), 3753);
@@ -49,7 +49,7 @@ test("durationToSeconds", () => {
   assert.equal(durationToSeconds(null), null);
 });
 
-test("stripHtml", () => {
+test("stripHtml decodes entities, breaks blocks into lines, nulls empties", () => {
   assert.equal(stripHtml("<p>Hi &amp; bye</p>"), "Hi & bye");
   assert.equal(stripHtml("<p>a</p><p>b</p>"), "a\nb");
   assert.equal(stripHtml("Kids&#39; Dash&nbsp;5K"), "Kids' Dash 5K");
